@@ -1,3 +1,7 @@
 # Created by .ignore support plugin (hsz.mobi)
 /.idea/
 /concierge.iml
+gutsdb.iml
+src/main/resources/
+src/test/
+target/
