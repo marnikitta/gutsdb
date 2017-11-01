@@ -1,7 +1,5 @@
 # Gutsdb (aka Yet another LevelDB)
 
-![Build Status](https://travis-ci.org/marnikitta/Concierge.svg?branch=master)
-
 LevelDB is an implementation of Google's SSTables appeared in BigTable paper
 
 ## Roadmap
