@@ -1,4 +1,4 @@
-package marnikitta.gutsdb.block;
+package marnikitta.gutsdb;
 
 
 import java.nio.ByteBuffer;
@@ -8,42 +8,41 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import static java.util.stream.Collectors.groupingByConcurrent;
 import static java.util.stream.Collectors.toList;
-import static java.util.stream.Collectors.toMap;
 import static java.util.stream.Collectors.toSet;
 
 public final class Block implements Iterable<Block.Entry> {
-  private final ByteBuffer buffer;
+  private final ByteBuffer backingBuffer;
 
   public Block(ByteBuffer backingBuffer) {
-    this.buffer = backingBuffer.slice();
+    this.backingBuffer = backingBuffer;
   }
 
   public static int spill(Map<ByteBuffer, ByteBuffer> source, ByteBuffer destination) {
-    int[] written = {0};
+    final int[] written = {0};
 
     source.forEach((key, value) -> {
-
-      destination.putInt(key.limit());
+      final int keySize = key.remaining();
+      final int valueSize = value.remaining();
       written[0] += Integer.BYTES;
-
-      destination.putInt(value.limit());
       written[0] += Integer.BYTES;
+      written[0] += keySize;
+      written[0] += valueSize;
 
-      key.rewind();
+      destination.putInt(keySize);
+      destination.putInt(valueSize);
+
+      key.mark();
       destination.put(key);
-      written[0] += key.limit();
+      key.reset();
 
-      value.rewind();
+      value.mark();
       destination.put(value);
-      written[0] += value.limit();
+      value.reset();
     });
 
     return written[0];
@@ -52,37 +51,35 @@ public final class Block implements Iterable<Block.Entry> {
   @Override
   public Iterator<Entry> iterator() {
     return new Iterator<Entry>() {
-      {
-        buffer.rewind();
-      }
+      private final ByteBuffer iteratorBuffer = backingBuffer.asReadOnlyBuffer();
 
       @Override
       public boolean hasNext() {
-        return buffer.hasRemaining();
+        return iteratorBuffer.hasRemaining();
       }
 
       @Override
       public Entry next() {
         if (hasNext()) {
-          final int keySize = buffer.getInt();
-          final int valueSize = buffer.getInt();
+          final int keySize = iteratorBuffer.getInt();
+          final int valueSize = iteratorBuffer.getInt();
 
-          final int realLimit = buffer.limit();
+          final int realLimit = iteratorBuffer.limit();
 
-          buffer.limit(buffer.position() + keySize);
-          final ByteBuffer key = buffer.slice();
-          buffer.position(buffer.position() + keySize);
+          iteratorBuffer.limit(iteratorBuffer.position() + keySize);
+          final ByteBuffer key = iteratorBuffer.slice();
+          iteratorBuffer.position(iteratorBuffer.position() + keySize);
 
 
-          buffer.limit(buffer.position() + valueSize);
-          final ByteBuffer value = buffer.slice();
+          iteratorBuffer.limit(iteratorBuffer.position() + valueSize);
+          final ByteBuffer value = iteratorBuffer.slice();
 
-          buffer.position(buffer.position() + valueSize);
-          buffer.limit(realLimit);
+          iteratorBuffer.position(iteratorBuffer.position() + valueSize);
+          iteratorBuffer.limit(realLimit);
 
           return new Entry(key, value);
         } else {
-          throw new NoSuchElementException();
+          throw new NoSuchElementException("Illegal backingBuffer format");
         }
       }
     };
@@ -99,7 +96,7 @@ public final class Block implements Iterable<Block.Entry> {
   }
 
   public boolean isEmpty() {
-    return buffer.limit() == 0;
+    return backingBuffer.limit() == 0;
   }
 
   public boolean containsKey(Object key) {
@@ -141,26 +138,5 @@ public final class Block implements Iterable<Block.Entry> {
     public ByteBuffer value() {
       return value;
     }
-  }
-
-
-  public static void main(String... args) {
-    final Map<ByteBuffer, ByteBuffer> myTable = Stream
-      .generate(UUID::randomUUID)
-      .limit(1000)
-      .map(UUID::toString)
-      .map(String::getBytes)
-      .map(ByteBuffer::wrap)
-      .collect(toMap(Function.identity(), Function.identity()));
-
-    final ByteBuffer allocate = ByteBuffer.allocate(100000);
-    spill(myTable, allocate);
-    allocate.flip();
-
-    final Block block = new Block(allocate);
-
-    final Map<ByteBuffer, ByteBuffer> map = block.asMap();
-
-    System.out.println(map.equals(myTable));
   }
 }

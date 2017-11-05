@@ -26,4 +26,4 @@ mvn package
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
+sThis project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
